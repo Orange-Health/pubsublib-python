@@ -23,7 +23,8 @@ class AWSPubSubAdapter():
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key
         )
-        self.sns_client = self.my_session.client("sns", endpoint_url=sns_endpoint)
+        self.sns_client = self.my_session.client(
+            "sns", endpoint_url=sns_endpoint)
         self.sqs_client = self.my_session.client("sqs")
         self.cache_adapter = CacheAdapter(redis_location)
 
@@ -268,20 +269,3 @@ class AWSPubSubAdapter():
         )
 
         return subscription
-
-
-"""
-a = AWSPubSubAdapter()
-result = a.publish_message_to_pubsub(
-    message="Hello from pubsublib! 54564",
-    sns_topic_arn="arn:aws:sns:ap-south-1:606514307308:pubsublib-django-testing",
-    region="ap-south-1"
-)
-
-# result = a.poll_message_from_queue(
-#     sqs_queue_url="https://sqs.ap-south-1.amazonaws.com/606514307308/pubsublib-django-testing",
-#     region="ap-south-1"
-# )
-
-print(result)
-"""

@@ -6,9 +6,9 @@ build-backend = "hatchling.build"
 name = "pubsublib_python_orangehealth"
 version = "0.0.1"
 authors = [
-  { name="Example Author", email="author@example.com" },
+  { name="Saket Shrivastava", email="message.saket@gmail.com" },
 ]
-description = "A small example package"
+description = "The Python Adaptation of the PubSubLib for Orange Health"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
