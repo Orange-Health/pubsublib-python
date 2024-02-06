@@ -2,7 +2,7 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 import boto3.session
-from src.pubsublib_python_orangehealth.aws.utils.helper import bind_attributes, is_large_message, validate_message_attributes
+from src.pubsublib_python_orangehealth.aws.utils.helper import bind_attributes, is_large_message, validate_message_attributes, is_message_integrity_verified
 from src.pubsublib_python_orangehealth.common.cache_adapter import CacheAdapter
 import uuid
 
@@ -15,7 +15,6 @@ class AWSPubSubAdapter():
         aws_region,
         aws_access_key_id,
         aws_secret_access_key,
-        sns_endpoint,
         redis_location
     ):
         self.my_session = boto3.session.Session(
@@ -23,8 +22,7 @@ class AWSPubSubAdapter():
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key
         )
-        self.sns_client = self.my_session.client(
-            "sns", endpoint_url=sns_endpoint)
+        self.sns_client = self.my_session.client("sns")
         self.sqs_client = self.my_session.client("sqs")
         self.cache_adapter = CacheAdapter(redis_location)
 
@@ -102,7 +100,7 @@ class AWSPubSubAdapter():
                 attributes["redis_key"] = redis_key
                 self.cache_adapter.set(redis_key, message, 10*24*60)
 
-            if validate_message_attributes(message_attributes):
+            if validate_message_attributes(attributes):
                 message_attributes = bind_attributes(attributes)
                 response = self.sns_client.publish(
                     TopicArn=topic_arn,
@@ -145,7 +143,7 @@ class AWSPubSubAdapter():
                 attributes["redis_key"] = redis_key
                 self.cache_adapter.set(redis_key, message, 10*24*60)
 
-            if validate_message_attributes(message_attributes):
+            if validate_message_attributes(attributes):
                 message_attributes = bind_attributes(attributes)
                 response = self.sns_client.publish(
                     TopicArn=topic_arn,
@@ -226,28 +224,34 @@ class AWSPubSubAdapter():
                 'MD5OfMessageAttributes': '275a635e474a51e0c5a2d638b19ba19e'
             }
         """
+        try:
+            recieved_message = self.sqs_client.receive_message(
+                QueueUrl=sqs_queue_url,
+                MaxNumberOfMessages=max_number_of_messages,
+                VisibilityTimeout=visibility_timeout,
+                WaitTimeSeconds=wait_time_seconds,
+                MessageAttributeNames=message_attribute_names,
+                AttributeNames=attribute_names
+            )
 
-        recieved_message = self.sqs_client.receive_message(
-            QueueUrl=sqs_queue_url,
-            MaxNumberOfMessages=max_number_of_messages,
-            VisibilityTimeout=visibility_timeout,
-            WaitTimeSeconds=wait_time_seconds,
-            MessageAttributeNames=message_attribute_names,
-            AttributeNames=attribute_names
-        )
-
-        if 'Messages' in recieved_message:
-            for message in recieved_message['Messages']:
-                processing_result = handler(message)
-                if processing_result:
-                    self.sqs_client.delete_message(
-                        QueueUrl=sqs_queue_url,
-                        ReceiptHandle=message['ReceiptHandle']
-                    )
-        else:
-            print("No messages received.")
-
-        return message
+            if 'Messages' in recieved_message:
+                for message in recieved_message['Messages']:
+                    if not is_message_integrity_verified(message['Body'], message['MD5OfBody']):
+                        raise ValueError(
+                            "message corrupted, Message integrity verification failed!")
+                    processing_result = handler(message)
+                    if processing_result:
+                        self.sqs_client.delete_message(
+                            QueueUrl=sqs_queue_url,
+                            ReceiptHandle=message['ReceiptHandle']
+                        )
+            else:
+                print("No messages received.")
+            return recieved_message
+        except ClientError as error:
+            logger.exception(
+                "Couldn't poll message from queue with URL=%s!", sqs_queue_url)
+            raise error
 
     def subscribe_to_topic(
         self,
@@ -265,7 +269,10 @@ class AWSPubSubAdapter():
             TopicArn=sns_topic_arn,
             Protocol="sqs",
             Endpoint=sqs_queue_arn,
-            ReturnSubscriptionArn=True
+            ReturnSubscriptionArn=True,
+            Attributes={
+                "RawMessageDelivery": "true"
+            }
         )
 
         return subscription
