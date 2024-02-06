@@ -1,7 +1,4 @@
 # pubsublib-python
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
+The Python Version for PubSubLib, using AWS SQS and SNS
 

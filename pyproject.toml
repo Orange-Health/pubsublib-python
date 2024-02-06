@@ -1,5 +1,9 @@
+[build-system]
+requires = ["hatchling", "boto3", "botocore", "redis"]
+build-backend = "hatchling.build"
+
 [project]
-name = "pubsublib_oh"
+name = "pubsublib_python_orangehealth"
 version = "0.0.1"
 authors = [
   { name="Example Author", email="author@example.com" },
@@ -14,5 +18,5 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/pypa/sampleproject"
-Issues = "https://github.com/pypa/sampleproject/issues"
+Homepage = "https://github.com/Orange-Health/pubsublib-python"
+Issues = "https://github.com/Orange-Health/pubsublib-python/issues"
