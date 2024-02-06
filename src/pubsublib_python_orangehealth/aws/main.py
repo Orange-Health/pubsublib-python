@@ -2,9 +2,8 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 import boto3.session
-from src.pubsublib_python_orangehealth.aws.sns_wrapper import SnsWrapper
 from src.pubsublib_python_orangehealth.aws.utils.helper import bind_attributes, is_large_message, validate_message_attributes
-from src.pubsublib_python_orangehealth.infrastructure.cache_adapter import CacheAdapter
+from src.pubsublib_python_orangehealth.common.cache_adapter import CacheAdapter
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -269,6 +268,7 @@ class AWSPubSubAdapter():
         )
 
         return subscription
+
 
 """
 a = AWSPubSubAdapter()
