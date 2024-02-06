@@ -1,2 +1,7 @@
 # pubsublib-python
-pubsub python adaptation
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
