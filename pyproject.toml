@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "boto3", "botocore", "redis"]
+requires = ["hatchling", "boto3", "botocore", "redis", "uuid", "hashlib"]
 build-backend = "hatchling.build"
 
 [project]

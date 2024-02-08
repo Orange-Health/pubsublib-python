@@ -2,8 +2,8 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 import boto3.session
-from src.pubsublib.aws.utils.helper import bind_attributes, is_large_message, validate_message_attributes, is_message_integrity_verified
-from src.pubsublib.common.cache_adapter import CacheAdapter
+from pubsublib.aws.utils.helper import bind_attributes, is_large_message, validate_message_attributes, is_message_integrity_verified
+from pubsublib.common.cache_adapter import CacheAdapter
 import uuid
 
 logger = logging.getLogger(__name__)
