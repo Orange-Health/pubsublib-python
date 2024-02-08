@@ -1,4 +1,3 @@
-# pubsublib-python
+# pubsublib
 
-The Python Version for PubSubLib, using AWS SQS and SNS
-
+- Python Library for PubSub, using AWS - SNS & SQS

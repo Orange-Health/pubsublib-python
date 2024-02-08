@@ -3,7 +3,7 @@ requires = ["hatchling", "boto3", "botocore", "redis"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pubsublib_python_orangehealth"
+name = "pubsublib"
 version = "0.0.1"
 authors = [
   { name="Saket Shrivastava", email="message.saket@gmail.com" },
