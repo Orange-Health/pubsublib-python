@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 class AWSPubSubAdapter():
     def __init__(
         self,
-        aws_region,
-        aws_access_key_id,
-        aws_secret_access_key,
-        redis_location
+        aws_region: str,
+        aws_access_key_id: str,
+        aws_secret_access_key: str,
+        redis_location: str
     ):
         self.my_session = boto3.session.Session(
             region_name=aws_region,
@@ -28,7 +28,7 @@ class AWSPubSubAdapter():
 
     def create_topic(
         self,
-        topic_name
+        topic_name: str
     ):
         """
         Creates a notification topic.
@@ -47,7 +47,7 @@ class AWSPubSubAdapter():
 
     def create_topic_fifo(
         self,
-        topic_name
+        topic_name: str
     ):
         """
         Create a FIFO topic.
@@ -78,9 +78,44 @@ class AWSPubSubAdapter():
 
     def publish_message(
         self,
-        topic_arn,
-        message,
-        attributes
+        topic_arn: str,
+        message: str,
+        attributes: dict,
+        is_fifo: bool,
+        message_group_id: str = None,
+        message_deduplication_id: str = None
+    ):
+        """
+        Publishes a message to a topic.
+
+        :param topic: The topic to publish to.
+        :param message: The message to publish.
+        :param message_group_id: The message group ID.
+        :param message_deduplication_id: The message deduplication ID.
+        :param attributes: The key-value attributes to attach to the message. Values
+                           must be either `str` or `bytes`.
+        :return: The ID of the message.
+        """
+        if is_fifo:
+            return self.__publish_message_fifo_queue(
+                topic_arn,
+                message,
+                message_group_id,
+                message_deduplication_id,
+                attributes
+            )
+        else:
+            return self.__publish_message_standard_queue(
+                topic_arn,
+                message,
+                attributes
+            )
+
+    def __publish_message_standard_queue(
+        self,
+        topic_arn: str,
+        message: str,
+        attributes: dict
     ):
         """
         Publishes a message, with attributes, to a topic. Subscriptions can be filtered
@@ -115,13 +150,13 @@ class AWSPubSubAdapter():
         else:
             return message_id
 
-    def publish_message_fifo(
+    def __publish_message_fifo_queue(
         self,
-        topic_arn,
-        message,
-        message_group_id,
-        message_deduplication_id,
-        attributes
+        topic_arn: str,
+        message: str,
+        message_group_id: str,
+        message_deduplication_id: str,
+        attributes: dict
     ):
         """
         Publishes a message to a FIFO topic. The message_group_id and message_deduplication_id
@@ -159,7 +194,23 @@ class AWSPubSubAdapter():
         else:
             return message_id
 
-    def create_queue(self, name):
+    def create_queue(
+        self,
+        name: str,
+        is_fifo: bool
+    ):
+        """
+        Creates a queue.
+
+        :param name: The name of the queue to create.
+        :return: The newly created queue.
+        """
+        if is_fifo:
+            return self.__create_fifo_queue(name)
+        else:
+            return self.__create_standard_queue(name)
+
+    def __create_standard_queue(self, name: str):
         """
         Creates a queue.
 
@@ -176,7 +227,7 @@ class AWSPubSubAdapter():
         else:
             return queue
 
-    def create_queue_fifo(self, name):
+    def __create_fifo_queue(self, name: str):
         """
         Creates a FIFO queue.
 
@@ -204,8 +255,8 @@ class AWSPubSubAdapter():
         self,
         sqs_queue_url: str,
         handler,
-        visibility_timeout: int = 20,
-        wait_time_seconds: int = 0,
+        visibility_timeout: int = 15,
+        wait_time_seconds: int = 20,
         message_attribute_names: list = ['All'],
         max_number_of_messages: int = 10,
         attribute_names: list = ['All']
