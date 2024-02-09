@@ -31,7 +31,7 @@ class AWSPubSubAdapter():
         if sqs_endpoint_url != None:
             self.sqs_client = self.my_session.client("sqs", endpoint_url=sqs_endpoint_url)
         else:
-            self.sqs_client = self.my_session.client("sns")
+            self.sqs_client = self.my_session.client("sqs")
         self.cache_adapter = CacheAdapter(redis_location)
 
     def create_topic(
