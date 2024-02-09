@@ -262,7 +262,7 @@ class AWSPubSubAdapter():
     def poll_message_from_queue(
         self,
         sqs_queue_url: str,
-        handler: function,
+        handler,
         visibility_timeout: int = 15,
         wait_time_seconds: int = 20,
         message_attribute_names: list = ['All'],
