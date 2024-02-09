@@ -27,3 +27,5 @@ pubsub_adapter = AWSPubSubAdapter(
     sqs_endpoint_url=None
 )
 ```
+
+https://github.com/Orange-Health/pubsublib-python/wiki/PyPI-%7C-Publish-Package#steps-to-publish-the-pubsublib-package-on-pypi
