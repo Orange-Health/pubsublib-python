@@ -15,15 +15,23 @@ class AWSPubSubAdapter():
         aws_region: str,
         aws_access_key_id: str,
         aws_secret_access_key: str,
-        redis_location: str
+        redis_location: str,
+        sns_endpoint_url: str = None,
+        sqs_endpoint_url: str = None
     ):
         self.my_session = boto3.session.Session(
             region_name=aws_region,
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key
         )
-        self.sns_client = self.my_session.client("sns")
-        self.sqs_client = self.my_session.client("sqs")
+        if sns_endpoint_url != None:
+            self.sns_client = self.my_session.client("sns", endpoint_url=sns_endpoint_url)
+        else:
+            self.sns_client = self.my_session.client("sns")
+        if sqs_endpoint_url != None:
+            self.sqs_client = self.my_session.client("sqs", endpoint_url=sqs_endpoint_url)
+        else:
+            self.sqs_client = self.my_session.client("sns")
         self.cache_adapter = CacheAdapter(redis_location)
 
     def create_topic(
