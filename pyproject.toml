@@ -7,6 +7,7 @@ name = "pubsublib"
 version = "0.0.4"
 authors = [
   { name="Saket Shrivastava", email="message.saket@gmail.com" },
+  { name="Rajendra Talekar", email="talekar.r@gmail.com"}
 ]
 description = "The Python Adaptation of the PubSubLib for Orange Health"
 readme = "README.md"
