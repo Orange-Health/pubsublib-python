@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pubsublib"
-version = "0.0.3"
+version = "0.0.4"
 authors = [
   { name="Saket Shrivastava", email="message.saket@gmail.com" },
 ]
@@ -20,3 +20,4 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/Orange-Health/pubsublib-python"
 Issues = "https://github.com/Orange-Health/pubsublib-python/issues"
+Repository = "https://github.com/Orange-Health/pubsublib-python"
