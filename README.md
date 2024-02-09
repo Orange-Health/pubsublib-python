@@ -23,5 +23,7 @@ pubsub_adapter = AWSPubSubAdapter(
     aws_access_key_id='XXXXX',
     aws_secret_access_key='XXXXX',
     redis_location='XXXXX',
+    sns_endpoint_url=None,
+    sqs_endpoint_url=None
 )
 ```
