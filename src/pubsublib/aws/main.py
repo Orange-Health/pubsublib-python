@@ -335,3 +335,6 @@ class AWSPubSubAdapter():
         )
 
         return subscription
+
+    def get_large_message(key):
+        return self.cache_adapter.get(redis_key)
