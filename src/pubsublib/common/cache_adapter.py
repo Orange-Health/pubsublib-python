@@ -15,21 +15,19 @@ class CacheAdapter:
         """
         Returns the set value
         """
-        redis_client = self.get_redis_client()
-        return redis_client.get(f"{self.prefix}{key}")
+        return self.redis_client.get(f"{self.prefix}{key}")
 
     def set(self, key, value, timeout=None, **kwargs):
         """
         sets the value in cache
         """
-        redis_client = self.get_redis_client()
-        redis_client.set(f"{self.prefix}{key}", value, timeout, **kwargs)
+        self.redis_client.set(f"{self.prefix}{key}", value, timeout, **kwargs)
 
     def delete(self, key):
         """
         Deletes a specific key from cache
         """
-        redis.delete(f"{self.prefix}{key}")
+        self.redis_client.delete(f"{self.prefix}{key}")
 
     def is_cache_available(self):
         """
@@ -38,7 +36,7 @@ class CacheAdapter:
         """
 
         try:
-            self.get(None)
+            self.redis_client.get(None)
         except (redis.exceptions.ConnectionError,
                 redis.exceptions.BusyLoadingError):
             return False
