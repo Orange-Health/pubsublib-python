@@ -8,6 +8,7 @@ class CacheAdapter:
         """
         Constructor
         """
+        self.prefix = "PUBSUB:"
         self.redis_client = redis.from_url(redis_location)
 
     def get(self, key):
@@ -15,20 +16,20 @@ class CacheAdapter:
         Returns the set value
         """
         redis_client = self.get_redis_client()
-        return redis_client.get(key)
+        return redis_client.get(f"{self.prefix}{key}")
 
     def set(self, key, value, timeout=None, **kwargs):
         """
         sets the value in cache
         """
         redis_client = self.get_redis_client()
-        redis_client.set(key, value, timeout, **kwargs)
+        redis_client.set(f"{self.prefix}{key}", value, timeout, **kwargs)
 
     def delete(self, key):
         """
         Deletes a specific key from cache
         """
-        redis.delete(key)
+        redis.delete(f"{self.prefix}{key}")
 
     def is_cache_available(self):
         """
