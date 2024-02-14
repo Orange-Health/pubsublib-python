@@ -53,7 +53,8 @@ class AWSPubSubAdapter():
 
     def __create_topic_standard(
         self,
-        topic_name: str
+        topic_name: str,
+        tags: list = []
     ):
         """
         Creates a notification topic.
@@ -62,7 +63,10 @@ class AWSPubSubAdapter():
         :return: The newly created topic.
         """
         try:
-            topic = self.sns_client.create_topic(Name=topic_name)
+            topic = self.sns_client.create_topic(
+                Name=topic_name,
+                Tags=tags
+            )
             logger.info("Created Standard topic %s with ARN %s.", topic_name, topic.arn)
         except ClientError:
             logger.exception("Couldn't create Standard topic %s.", topic_name)
@@ -72,7 +76,9 @@ class AWSPubSubAdapter():
 
     def __create_topic_fifo(
         self,
-        topic_name: str
+        topic_name: str,
+        tags: list = [],
+        content_based_deduplication: bool = False
     ):
         """
         Create a FIFO topic.
@@ -88,9 +94,10 @@ class AWSPubSubAdapter():
                 topic = self.sns_client.create_topic(
                     Name=topic_name,
                     Attributes={
-                        "FifoTopic": str(True),
-                        "ContentBasedDeduplication": str(False),
+                        "FifoTopic": True,
+                        "ContentBasedDeduplication": content_based_deduplication
                     },
+                    Tags=tags
                 )
                 logger.info("Created FIFO topic with name=%s.", topic_name)
                 return topic
@@ -235,7 +242,13 @@ class AWSPubSubAdapter():
         else:
             return self.__create_standard_queue(name)
 
-    def __create_standard_queue(self, name: str):
+    def __create_standard_queue(
+            self, 
+            name: str,
+            visiblity_timeout: int = 30,
+            message_retention_period: int = 345600,
+            tags: list = []
+        ):
         """
         Creates a queue.
 
@@ -244,7 +257,14 @@ class AWSPubSubAdapter():
         :return: The newly created queue.
         """
         try:
-            queue = self.sqs_client.create_queue(QueueName=name)
+            queue = self.sqs_client.create_queue(
+                QueueName=name,
+                Attributes={
+                    "VisibilityTimeout": visiblity_timeout,
+                    "MessageRetentionPeriod": message_retention_period
+                },
+                Tags=tags
+            )
             logger.info("Created queue %s with URL %s.", name, queue.url)
         except ClientError:
             logger.exception("Couldn't create queue %s.", name)
@@ -252,7 +272,14 @@ class AWSPubSubAdapter():
         else:
             return queue
 
-    def __create_fifo_queue(self, name: str):
+    def __create_fifo_queue(
+            self, 
+            name: str,
+            visiblity_timeout: int = 30,
+            message_retention_period: int = 345600, #4days
+            content_based_deduplication: bool = True,
+            tags: list = []
+        ):
         """
         Creates a FIFO queue.
 
@@ -264,8 +291,12 @@ class AWSPubSubAdapter():
                 queue = self.sqs_client.create_queue(
                     QueueName=name,
                     Attributes={
-                        "FifoQueue": "true"
+                        "FifoQueue": "true",
+                        "VisibilityTimeout": visiblity_timeout,
+                        "MessageRetentionPeriod": message_retention_period,
+                        "ContentBasedDeduplication": content_based_deduplication
                     },
+                    Tags=tags
                 )
                 logger.info("Created FIFO queue with name=%s.", name)
                 return queue
@@ -340,7 +371,9 @@ class AWSPubSubAdapter():
     def subscribe_to_topic(
         self,
         sns_topic_arn: str,
-        sqs_queue_arn: str
+        sqs_queue_arn: str,
+        raw_message_delivery: bool = False,
+        filter_policy: dict = None
     ):
         """
             The SubscriptionArn response will look something like:
@@ -359,7 +392,8 @@ class AWSPubSubAdapter():
             Endpoint=sqs_queue_arn,
             ReturnSubscriptionArn=True,
             Attributes={
-                "RawMessageDelivery": "true"
+                "RawMessageDelivery": raw_message_delivery,
+                "FilterPolicy": json.dump(filter_policy) if filter_policy else None
             }
         )
 

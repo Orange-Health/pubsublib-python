@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pubsublib"
-version = "0.1.1"
+version = "0.1.2"
 authors = [
   { name="Saket Shrivastava", email="message.saket@gmail.com" },
   { name="Rajendra Talekar", email="talekar.r@gmail.com"}
