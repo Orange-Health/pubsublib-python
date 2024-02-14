@@ -1,3 +1,4 @@
+import json
 import boto3
 from botocore.exceptions import ClientError
 import logging
@@ -36,6 +37,22 @@ class AWSPubSubAdapter():
 
     def create_topic(
         self,
+        topic_name: str,
+        is_fifo: bool
+    ):
+        """
+        Creates a topic.
+
+        :param topic_name: The name of the topic to create.
+        :return: The newly created topic.
+        """
+        if is_fifo:
+            return self.__create_topic_fifo(topic_name)
+        else:
+            return self.__create_topic_standard(topic_name)
+
+    def __create_topic_standard(
+        self,
         topic_name: str
     ):
         """
@@ -46,14 +63,14 @@ class AWSPubSubAdapter():
         """
         try:
             topic = self.sns_client.create_topic(Name=topic_name)
-            logger.info("Created topic %s with ARN %s.", topic_name, topic.arn)
+            logger.info("Created Standard topic %s with ARN %s.", topic_name, topic.arn)
         except ClientError:
-            logger.exception("Couldn't create topic %s.", topic_name)
+            logger.exception("Couldn't create Standard topic %s.", topic_name)
             raise
         else:
             return topic
 
-    def create_topic_fifo(
+    def __create_topic_fifo(
         self,
         topic_name: str
     ):
@@ -298,6 +315,14 @@ class AWSPubSubAdapter():
                     if not is_message_integrity_verified(message['Body'], message['MD5OfBody']):
                         raise ValueError(
                             "message corrupted, Message integrity verification failed!")
+                    if message['MessageAttributes'] and 'redis_key' in message['MessageAttributes']:
+                        redis_key = message['MessageAttributes']['redis_key']['Value']
+                        message_body = self.fetch_value_from_redis(redis_key)
+                        if message_body:
+                            message['Body'] = message_body
+                        else:
+                            logger.exception("Couldn't find message body in redis with key=%s!", redis_key)
+                            continue
                     processing_result = handler(message)
                     if processing_result:
                         self.sqs_client.delete_message(
@@ -323,6 +348,10 @@ class AWSPubSubAdapter():
                 "SubscriptionArn": "arn:aws:sns:us-west-2:123456789012:MyTopic:5be8f5b7-6a41-41c9-98e2-9c8e8f946b7d"
             }
         """
+        self.__update_sns_iam_policy_to_push_message_to_sqs(
+            sns_topic_arn,
+            sqs_queue_arn
+        )
 
         subscription = self.sns_client.subscribe(
             TopicArn=sns_topic_arn,
@@ -336,5 +365,73 @@ class AWSPubSubAdapter():
 
         return subscription
 
-    def get_large_message(self, key):
-        return self.cache_adapter.get(key)
+    def fetch_value_from_redis(self, redis_key):
+        """
+        Fetches value from redis with the given key.
+        """
+        return self.cache_adapter.get(redis_key)
+
+    def tag_resource(
+        self,
+        resource_arn: str,
+        tags: dict
+    ):
+        """
+        Adds tags to the specified Amazon SNS topic.
+
+        :param resource_arn: The Amazon Resource Name (ARN) of the topic to tag.
+        :param tags: The key-value tags to add to the topic.
+        """
+        try:
+            self.sns_client.tag_resource(
+                ResourceArn=resource_arn,
+                Tags=tags
+            )
+        except ClientError:
+            logger.exception(
+                "Couldn't tag resource with ARN %s.", resource_arn)
+            raise
+
+    def __update_sns_iam_policy_to_push_message_to_sqs(
+        self,
+        sns_topic_arn: str,
+        sqs_queue_arn: str
+    ):
+        """
+        Updates the policy of the SNS topic to allow it to push messages to the SQS queue.
+
+        :param sns_topic_arn: The ARN of the SNS topic.
+        :param sqs_queue_arn: The ARN of the SQS queue.
+        """
+        try:
+            policy = {
+                "Version": "2012-10-17",
+                "Id": f"{sns_topic_arn}-policy",
+                "Statement": [
+                    {
+                        "Sid": f"{sns_topic_arn}-statement",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "sns.amazonaws.com"
+                        },
+                        "Action": "SQS:SendMessage",
+                        "Resource": sqs_queue_arn,
+                        "Condition": {
+                            "ArnEquals": {
+                                "aws:SourceArn": sns_topic_arn
+                            }
+                        }
+                    }
+                ]
+            }
+            policy = json.dumps(policy)
+            self.sqs_client.set_queue_attributes(
+                QueueUrl=sqs_queue_arn,
+                Attributes={
+                    "Policy": policy
+                }
+            )
+        except ClientError:
+            logger.exception(
+                "Couldn't update SNS policy to push messages to SQS queue %s.", sqs_queue_arn)
+            raise
