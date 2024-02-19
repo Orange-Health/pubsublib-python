@@ -231,7 +231,11 @@ class AWSPubSubAdapter():
     def create_queue(
         self,
         name: str,
-        is_fifo: bool
+        is_fifo: bool,
+        visiblity_timeout: int = 30,
+        message_retention_period: int = 345600,
+        content_based_deduplication: bool = False,
+        tags: dict = {}
     ):
         """
         Creates a queue.
@@ -240,9 +244,9 @@ class AWSPubSubAdapter():
         :return: The newly created queue.
         """
         if is_fifo:
-            return self.__create_fifo_queue(name)
+            return self.__create_fifo_queue(name, visiblity_timeout, message_retention_period, content_based_deduplication, tags)
         else:
-            return self.__create_standard_queue(name)
+            return self.__create_standard_queue(name, visiblity_timeout, message_retention_period, tags)
 
     def __create_standard_queue(
             self, 
