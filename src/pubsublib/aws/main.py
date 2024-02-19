@@ -352,11 +352,12 @@ class AWSPubSubAdapter():
                     if not is_message_integrity_verified(message['Body'], message['MD5OfBody']):
                         raise ValueError(
                             "message corrupted, Message integrity verification failed!")
-                    if message['MessageAttributes'] and 'redis_key' in message['MessageAttributes']:
-                        redis_key = message['MessageAttributes']['redis_key']['Value']
+                    message['Body'] = json.loads(message['Body'])
+                    if message['Body']['MessageAttributes'] and 'redis_key' in message['Body']['MessageAttributes']:
+                        redis_key = message['Body']['MessageAttributes']['redis_key']['Value']
                         message_body = self.fetch_value_from_redis(redis_key)
                         if message_body:
-                            message['Body'] = message_body
+                            message['Body']['Message'] = message_body
                         else:
                             logger.exception("Couldn't find message body in redis with key=%s!", redis_key)
                             continue
