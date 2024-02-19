@@ -67,7 +67,7 @@ class AWSPubSubAdapter():
         try:
             topic = self.sns_client.create_topic(
                 Name=topic_name,
-                Tags=tags
+                Tags=self.__convert_dict_to_tag_list(tags)
             )
             logger.info("Created Standard topic %s with ARN %s.", topic_name, topic.arn)
         except ClientError:
@@ -99,7 +99,7 @@ class AWSPubSubAdapter():
                         "FifoTopic": "true",
                         "ContentBasedDeduplication": str(content_based_deduplication).lower()
                     },
-                    Tags=tags
+                    Tags=self.__convert_dict_to_tag_list(tags)
                 )
                 logger.info("Created FIFO topic with name=%s.", topic_name)
                 return topic
@@ -411,7 +411,7 @@ class AWSPubSubAdapter():
         """
         return self.cache_adapter.get(redis_key)
 
-    def tag_resource(
+    def tag_sns_resource(
         self,
         resource_arn: str,
         tags: dict
@@ -425,11 +425,32 @@ class AWSPubSubAdapter():
         try:
             self.sns_client.tag_resource(
                 ResourceArn=resource_arn,
-                Tags=tags
+                Tags=self.__convert_dict_to_tag_list(tags)
             )
         except ClientError:
             logger.exception(
                 "Couldn't tag resource with ARN %s.", resource_arn)
+            raise
+
+    def tag_sqs_resource(
+        self,
+        queue_url, 
+        tags: dict
+    ):
+        """
+        Adds tags to the specified Amazon SQS queue.
+
+        :param queue_url: The URL of the queue to tag.
+        :param tags: The key-value tags to add to the queue.
+        """
+        try:
+            self.sqs_client.tag_queue(
+                QueueUrl=queue_url,
+                Tags=tags
+            )
+        except ClientError:
+            logger.exception(
+                "Couldn't tag queue with URL %s.", queue_url)
             raise
 
     def __update_sns_iam_policy_to_push_message_to_sqs(
@@ -475,3 +496,18 @@ class AWSPubSubAdapter():
             logger.exception(
                 "Couldn't update SNS policy to push messages to SQS queue %s.", sqs_queue_arn)
             raise
+
+    def __convert_dict_to_tag_list(self, tags: dict):
+        """
+        Converts the dictionary of tags to a list of tags.
+
+        :param tags: The dictionary of tags to convert.
+        :return: The list of tags.
+        """
+        processed_tags = []
+        for key, value in tags.items():
+            processed_tags.append({
+                "Key": key,
+                "Value": value
+            })
+        return processed_tags
