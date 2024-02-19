@@ -292,8 +292,8 @@ class AWSPubSubAdapter():
                     QueueName=name,
                     Attributes={
                         "FifoQueue": "true",
-                        "VisibilityTimeout": visiblity_timeout,
-                        "MessageRetentionPeriod": message_retention_period,
+                        "VisibilityTimeout": str(visiblity_timeout),
+                        "MessageRetentionPeriod": str(message_retention_period),
                         "ContentBasedDeduplication": str(content_based_deduplication).lower()
                     },
                     Tags=tags
