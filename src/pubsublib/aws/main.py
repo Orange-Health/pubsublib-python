@@ -94,8 +94,8 @@ class AWSPubSubAdapter():
                 topic = self.sns_client.create_topic(
                     Name=topic_name,
                     Attributes={
-                        "FifoTopic": True,
-                        "ContentBasedDeduplication": content_based_deduplication
+                        "FifoTopic": "true",
+                        "ContentBasedDeduplication": str(content_based_deduplication).lower()
                     },
                     Tags=tags
                 )
@@ -294,7 +294,7 @@ class AWSPubSubAdapter():
                         "FifoQueue": "true",
                         "VisibilityTimeout": visiblity_timeout,
                         "MessageRetentionPeriod": message_retention_period,
-                        "ContentBasedDeduplication": content_based_deduplication
+                        "ContentBasedDeduplication": str(content_based_deduplication).lower()
                     },
                     Tags=tags
                 )
@@ -392,7 +392,7 @@ class AWSPubSubAdapter():
             Endpoint=sqs_queue_arn,
             ReturnSubscriptionArn=True,
             Attributes={
-                "RawMessageDelivery": raw_message_delivery,
+                "RawMessageDelivery": str(raw_message_delivery).lower(),
                 "FilterPolicy": json.dump(filter_policy) if filter_policy else None
             }
         )
