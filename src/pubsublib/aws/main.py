@@ -38,7 +38,9 @@ class AWSPubSubAdapter():
     def create_topic(
         self,
         topic_name: str,
-        is_fifo: bool
+        is_fifo: bool,
+        tags: dict = {},
+        content_based_deduplication: bool = False
     ):
         """
         Creates a topic.
@@ -47,14 +49,14 @@ class AWSPubSubAdapter():
         :return: The newly created topic.
         """
         if is_fifo:
-            return self.__create_topic_fifo(topic_name)
+            return self.__create_topic_fifo(topic_name, tags, content_based_deduplication)
         else:
-            return self.__create_topic_standard(topic_name)
+            return self.__create_topic_standard(topic_name, tags)
 
     def __create_topic_standard(
         self,
         topic_name: str,
-        tags: list = []
+        tags: dict = {}
     ):
         """
         Creates a notification topic.
@@ -77,7 +79,7 @@ class AWSPubSubAdapter():
     def __create_topic_fifo(
         self,
         topic_name: str,
-        tags: list = [],
+        tags: dict = {},
         content_based_deduplication: bool = False
     ):
         """
@@ -247,7 +249,7 @@ class AWSPubSubAdapter():
             name: str,
             visiblity_timeout: int = 30,
             message_retention_period: int = 345600,
-            tags: list = []
+            tags: dict = {}
         ):
         """
         Creates a queue.
@@ -263,7 +265,7 @@ class AWSPubSubAdapter():
                     "VisibilityTimeout": visiblity_timeout,
                     "MessageRetentionPeriod": message_retention_period
                 },
-                Tags=tags
+                tags=tags
             )
             logger.info("Created queue %s with URL %s.", name, queue.url)
         except ClientError:
@@ -278,7 +280,7 @@ class AWSPubSubAdapter():
             visiblity_timeout: int = 30,
             message_retention_period: int = 345600, #4days
             content_based_deduplication: bool = True,
-            tags: list = []
+            tags: dict = {}
         ):
         """
         Creates a FIFO queue.
@@ -296,7 +298,7 @@ class AWSPubSubAdapter():
                         "MessageRetentionPeriod": str(message_retention_period),
                         "ContentBasedDeduplication": str(content_based_deduplication).lower()
                     },
-                    Tags=tags
+                    tags=tags
                 )
                 logger.info("Created FIFO queue with name=%s.", name)
                 return queue
