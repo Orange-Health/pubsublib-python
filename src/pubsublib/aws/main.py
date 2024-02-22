@@ -70,7 +70,7 @@ class AWSPubSubAdapter():
                 Name=topic_name,
                 Tags=self.__convert_dict_to_tag_list(tags)
             )
-            logger.info("Created Standard topic %s with ARN %s.", topic_name, topic.arn)
+            logger.info("Created Standard topic %s", topic_name)
         except ClientError:
             logger.exception("Couldn't create Standard topic %s.", topic_name)
             raise
