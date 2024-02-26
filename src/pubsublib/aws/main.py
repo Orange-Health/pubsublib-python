@@ -18,7 +18,8 @@ class AWSPubSubAdapter():
         aws_secret_access_key: str,
         redis_location: str,
         sns_endpoint_url: str = None,
-        sqs_endpoint_url: str = None
+        sqs_endpoint_url: str = None,
+        max_connections: int = 10
     ):
         self.my_session = boto3.session.Session(
             region_name=aws_region,
@@ -33,7 +34,7 @@ class AWSPubSubAdapter():
             self.sqs_client = self.my_session.client("sqs", endpoint_url=sqs_endpoint_url)
         else:
             self.sqs_client = self.my_session.client("sqs")
-        self.cache_adapter = CacheAdapter(redis_location)
+        self.cache_adapter = CacheAdapter(redis_location, max_connections)
 
     def create_topic(
         self,

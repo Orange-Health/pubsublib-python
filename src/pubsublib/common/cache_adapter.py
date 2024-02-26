@@ -4,12 +4,12 @@ class CacheAdapter:
     """
     A class which serves as an adapter for Cache
     """
-    def __init__(self, redis_location):
+    def __init__(self, redis_location, max_connections=10):
         """
         Constructor
         """
         self.prefix = "PUBSUB:"
-        self.redis_client = redis.from_url(redis_location)
+        self.redis_client = redis.ConnectionPool(redis_location, max_connections=max_connections)
 
     def get(self, key):
         """
