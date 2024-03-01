@@ -267,8 +267,8 @@ class AWSPubSubAdapter():
             queue = self.sqs_client.create_queue(
                 QueueName=name,
                 Attributes={
-                    "VisibilityTimeout": visiblity_timeout,
-                    "MessageRetentionPeriod": message_retention_period
+                    "VisibilityTimeout": str(visiblity_timeout),
+                    "MessageRetentionPeriod": str(message_retention_period)
                 },
                 tags=tags
             )
