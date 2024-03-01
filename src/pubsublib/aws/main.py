@@ -381,7 +381,7 @@ class AWSPubSubAdapter():
         sns_topic_arn: str,
         sqs_queue_arn: str,
         raw_message_delivery: bool = False,
-        filter_policy: dict = None
+        filter_policy: dict = {}
     ):
         """
             The SubscriptionArn response will look something like:
@@ -401,7 +401,7 @@ class AWSPubSubAdapter():
             ReturnSubscriptionArn=True,
             Attributes={
                 "RawMessageDelivery": str(raw_message_delivery).lower(),
-                "FilterPolicy": json.dump(filter_policy) if filter_policy else None
+                "FilterPolicy": json.dumps(filter_policy) if filter_policy else None
             }
         )
 
