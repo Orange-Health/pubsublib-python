@@ -4,9 +4,9 @@ import uuid
 
 def is_large_message(message: str):
     """
-    returns True if the message is larger than 200KB
+    returns True if the message is larger than 64KB
     """
-    return len(message) > 200 * 1024
+    return len(message) > 64 * 1024
 
 def is_message_integrity_verified(message: str, md5_hash: str):
     """

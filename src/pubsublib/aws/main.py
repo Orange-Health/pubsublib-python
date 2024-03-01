@@ -165,7 +165,7 @@ class AWSPubSubAdapter():
         """
         try:
             if is_large_message(message):
-                # body is larger than 200kB. Best to put it in redis with expiry time of 10 days
+                # body is larger than 64kB. Best to put it in redis with expiry time of 10 days
                 redis_key = uuid.uuid4()
                 attributes["redis_key"] = redis_key
                 self.cache_adapter.set(redis_key, message, 10*24*60)
