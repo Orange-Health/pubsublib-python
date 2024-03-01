@@ -272,7 +272,7 @@ class AWSPubSubAdapter():
                 },
                 tags=tags
             )
-            logger.info("Created queue %s with URL %s.", name, queue.url)
+            logger.info("Created queue %s with URL %s.", name, queue.QueueUrl)
         except ClientError:
             logger.exception("Couldn't create queue %s.", name)
             raise
