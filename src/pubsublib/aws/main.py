@@ -272,7 +272,7 @@ class AWSPubSubAdapter():
                 },
                 tags=tags
             )
-            logger.info("Created queue %s with URL %s.", name, queue.QueueUrl)
+            logger.info("Created queue %s ", name)
         except ClientError:
             logger.exception("Couldn't create queue %s.", name)
             raise
@@ -379,7 +379,7 @@ class AWSPubSubAdapter():
     def subscribe_to_topic(
         self,
         sns_topic_arn: str,
-        sqs_queue_arn: str,
+        sqs_queue_url: str,
         raw_message_delivery: bool = False,
         filter_policy: dict = {}
     ):
@@ -389,6 +389,7 @@ class AWSPubSubAdapter():
                 "SubscriptionArn": "arn:aws:sns:us-west-2:123456789012:MyTopic:5be8f5b7-6a41-41c9-98e2-9c8e8f946b7d"
             }
         """
+        sqs_queue_arn = self.sqs_url_to_arn(sqs_queue_url)
         self.__update_sns_iam_policy_to_push_message_to_sqs(
             sns_topic_arn,
             sqs_queue_arn
@@ -513,3 +514,10 @@ class AWSPubSubAdapter():
                 "Value": value
             })
         return processed_tags
+    
+    def sqs_url_to_arn(self, queue_url):
+        response = self.sqs_client.get_queue_attributes(
+            QueueUrl=queue_url,
+            AttributeNames=['QueueArn']
+        )
+        return response['Attributes']['QueueArn']
