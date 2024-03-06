@@ -381,6 +381,7 @@ class AWSPubSubAdapter():
         sns_topic_arn: str,
         sqs_queue_url: str,
         raw_message_delivery: bool = False,
+        protocol: str = "sqs",
         filter_policy: dict = {}
     ):
         """
@@ -397,7 +398,7 @@ class AWSPubSubAdapter():
 
         subscription = self.sns_client.subscribe(
             TopicArn=sns_topic_arn,
-            Protocol="sqs",
+            Protocol=protocol,
             Endpoint=sqs_queue_arn,
             ReturnSubscriptionArn=True,
             Attributes={
