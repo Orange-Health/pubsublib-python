@@ -27,11 +27,13 @@ class AWSPubSubAdapter():
             aws_secret_access_key=aws_secret_access_key
         )
         if sns_endpoint_url != None:
-            self.sns_client = self.my_session.client("sns", endpoint_url=sns_endpoint_url)
+            self.sns_client = self.my_session.client(
+                "sns", endpoint_url=sns_endpoint_url)
         else:
             self.sns_client = self.my_session.client("sns")
         if sqs_endpoint_url != None:
-            self.sqs_client = self.my_session.client("sqs", endpoint_url=sqs_endpoint_url)
+            self.sqs_client = self.my_session.client(
+                "sqs", endpoint_url=sqs_endpoint_url)
         else:
             self.sqs_client = self.my_session.client("sqs")
         self.cache_adapter = CacheAdapter(redis_location, max_connections)
@@ -250,12 +252,12 @@ class AWSPubSubAdapter():
             return self.__create_standard_queue(name, visiblity_timeout, message_retention_period, tags)
 
     def __create_standard_queue(
-            self, 
-            name: str,
-            visiblity_timeout: int = 30,
-            message_retention_period: int = 345600,
-            tags: dict = {}
-        ):
+        self,
+        name: str,
+        visiblity_timeout: int = 30,
+        message_retention_period: int = 345600,
+        tags: dict = {}
+    ):
         """
         Creates a queue.
 
@@ -280,13 +282,13 @@ class AWSPubSubAdapter():
             return queue
 
     def __create_fifo_queue(
-            self, 
-            name: str,
-            visiblity_timeout: int = 30,
-            message_retention_period: int = 345600, #4days
-            content_based_deduplication: bool = True,
-            tags: dict = {}
-        ):
+        self,
+        name: str,
+        visiblity_timeout: int = 30,
+        message_retention_period: int = 345600,  # 4days
+        content_based_deduplication: bool = True,
+        tags: dict = {}
+    ):
         """
         Creates a FIFO queue.
 
@@ -360,7 +362,8 @@ class AWSPubSubAdapter():
                         if message_body:
                             message['Body']['Message'] = message_body
                         else:
-                            logger.exception("Couldn't find message body in redis with key=%s!", redis_key)
+                            logger.exception(
+                                "Couldn't find message body in redis with key=%s!", redis_key)
                             continue
                     processing_result = handler(message)
                     if processing_result:
@@ -378,7 +381,7 @@ class AWSPubSubAdapter():
 
     def subscribe_to_topic(
         self,
-        sns_topic_arn: str,
+        sns_topic_arn_list: list,
         sqs_queue_url: str,
         raw_message_delivery: bool = False,
         protocol: str = "sqs",
@@ -392,20 +395,23 @@ class AWSPubSubAdapter():
         """
         sqs_queue_arn = self.sqs_url_to_arn(sqs_queue_url)
         self.__update_sns_iam_policy_to_push_message_to_sqs(
-            sns_topic_arn,
-            sqs_queue_arn
+            sns_topic_arn_list,
+            sqs_queue_url
         )
-
-        subscription = self.sns_client.subscribe(
-            TopicArn=sns_topic_arn,
-            Protocol=protocol,
-            Endpoint=sqs_queue_arn,
-            ReturnSubscriptionArn=True,
-            Attributes={
-                "RawMessageDelivery": str(raw_message_delivery).lower(),
-                "FilterPolicy": json.dumps(filter_policy) if filter_policy else None
-            }
-        )
+        Attributes = {
+            "RawMessageDelivery": str(raw_message_delivery).lower(),
+        }
+        if filter_policy:
+            Attributes["FilterPolicy"] = json.dumps(filter_policy)
+        for sns_topic_arn in sns_topic_arn_list:
+            subscription = self.sns_client.subscribe(
+                TopicArn=sns_topic_arn,
+                Protocol=protocol,
+                Endpoint=sqs_queue_arn,
+                ReturnSubscriptionArn=True,
+                Attributes=Attributes
+            )
+            logger.info("Subscribed to topic with ARN=%s", sns_topic_arn)
 
         return subscription
 
@@ -438,7 +444,7 @@ class AWSPubSubAdapter():
 
     def tag_sqs_resource(
         self,
-        queue_url, 
+        queue_url,
         tags: dict
     ):
         """
@@ -459,8 +465,8 @@ class AWSPubSubAdapter():
 
     def __update_sns_iam_policy_to_push_message_to_sqs(
         self,
-        sns_topic_arn: str,
-        sqs_queue_arn: str
+        sns_topic_arn_list: list,
+        sqs_queue_url: str
     ):
         """
         Updates the policy of the SNS topic to allow it to push messages to the SQS queue.
@@ -469,12 +475,13 @@ class AWSPubSubAdapter():
         :param sqs_queue_arn: The ARN of the SQS queue.
         """
         try:
+            sqs_queue_arn = self.sqs_url_to_arn(sqs_queue_url)
             policy = {
                 "Version": "2012-10-17",
-                "Id": f"{sns_topic_arn}-policy",
+                "Id": f"{sqs_queue_arn}-policy",
                 "Statement": [
                     {
-                        "Sid": f"{sns_topic_arn}-statement",
+                        "Sid": f"{sqs_queue_arn}-statement",
                         "Effect": "Allow",
                         "Principal": {
                             "Service": "sns.amazonaws.com"
@@ -483,7 +490,7 @@ class AWSPubSubAdapter():
                         "Resource": sqs_queue_arn,
                         "Condition": {
                             "ArnEquals": {
-                                "aws:SourceArn": sns_topic_arn
+                                "aws:SourceArn": sns_topic_arn_list
                             }
                         }
                     }
@@ -491,7 +498,7 @@ class AWSPubSubAdapter():
             }
             policy = json.dumps(policy)
             self.sqs_client.set_queue_attributes(
-                QueueUrl=sqs_queue_arn,
+                QueueUrl=sqs_queue_url,
                 Attributes={
                     "Policy": policy
                 }
@@ -515,7 +522,7 @@ class AWSPubSubAdapter():
                 "Value": value
             })
         return processed_tags
-    
+
     def sqs_url_to_arn(self, queue_url):
         response = self.sqs_client.get_queue_attributes(
             QueueUrl=queue_url,
