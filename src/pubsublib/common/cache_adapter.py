@@ -1,15 +1,19 @@
 import redis
 
+
 class CacheAdapter:
     """
     A class which serves as an adapter for Cache
     """
+
     def __init__(self, redis_location, max_connections=10):
         """
         Constructor
         """
         self.prefix = "PUBSUB:"
-        self.redis_client = redis.ConnectionPool(redis_location, max_connections=max_connections)
+        self.redis_pool = redis.ConnectionPool.from_url(
+            redis_location, max_connections=max_connections)
+        self.redis_client = redis.Redis(connection_pool=self.redis_pool)
 
     def get(self, key):
         """
