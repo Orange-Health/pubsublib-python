@@ -403,9 +403,10 @@ class AWSPubSubAdapter():
                 'MessageAttributes': {},
                 'MD5OfMessageAttributes': '275a635e474a51e0c5a2d638b19ba19e'
             }
+
         """
         try:
-            recieved_message = self.sqs_client.receive_message(
+            received_message = self.sqs_client.receive_message(
                 QueueUrl=sqs_queue_url,
                 MaxNumberOfMessages=max_number_of_messages,
                 VisibilityTimeout=visibility_timeout,
@@ -414,22 +415,23 @@ class AWSPubSubAdapter():
                 AttributeNames=attribute_names
             )
 
-            if 'Messages' in recieved_message:
-                for message in recieved_message['Messages']:
+            if 'Messages' in received_message:
+                for message in received_message['Messages']:
                     if not is_message_integrity_verified(message['Body'], message['MD5OfBody']):
-                        raise ValueError(
-                            "message corrupted, Message integrity verification failed!")
+                        raise ValueError("Message corrupted, Message integrity verification failed!")
+
                     message['Body'] = json.loads(message['Body'])
-                    message_attributes = message['MessageAttributes']
-                    if message_attributes and 'redis_key' in message_attributes:
-                        redis_key = message_attributes['redis_key']['Value']
+
+                    message_attributes = message.get('MessageAttributes', {})
+                    redis_key = message_attributes.get('redis_key', {}).get('Value')
+                    if redis_key:
                         message_body = self.fetch_value_from_redis(redis_key)
                         if message_body:
                             message['Body'] = message_body
                         else:
-                            logger.exception(
-                                "Couldn't find message body in redis with key=%s!", redis_key)
+                            logger.exception("Couldn't find message body in Redis with key=%s!", redis_key)
                             continue
+
                     processing_result = handler(message)
                     if processing_result:
                         self.sqs_client.delete_message(
@@ -438,10 +440,11 @@ class AWSPubSubAdapter():
                         )
             else:
                 logger.info("No messages in queue with URL=%s!", sqs_queue_url)
-            return recieved_message
+
+            return received_message
+
         except ClientError as error:
-            logger.exception(
-                "Couldn't poll message from queue with URL=%s!", sqs_queue_url)
+            logger.exception("Couldn't poll message from queue with URL=%s!", sqs_queue_url)
             raise error
     
     def subscribe_to_topic(
