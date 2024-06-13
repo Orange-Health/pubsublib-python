@@ -378,7 +378,75 @@ class AWSPubSubAdapter():
             logger.exception(
                 "Couldn't poll message from queue with URL=%s!", sqs_queue_url)
             raise error
+        
+    def poll_raw_message_from_queue(
+        self,
+        sqs_queue_url: str,
+        handler,
+        visibility_timeout: int = 15,
+        wait_time_seconds: int = 20,
+        message_attribute_names: list = ['All'],
+        max_number_of_messages: int = 10,
+        attribute_names: list = ['All']
+    ):
+        """
+            This method is used to poll raw message from the queue when raw message delivery is enabled for a topic.
+            The Message response will look something like:
+            {
+                'MessageId': 'c6af9ac6-7b61-11e6-9a41-93e8deadbeef',
+                'ReceiptHandle': 'MessageReceiptHandle',
+                'MD5OfBody': '275a635e474a51e0c5a2d638b19ba19e',
+                'Body': 'Hello from SQS!',
+                'Attributes': {
+                    'SentTimestamp': '1477981389573'
+                },
+                'MessageAttributes': {},
+                'MD5OfMessageAttributes': '275a635e474a51e0c5a2d638b19ba19e'
+            }
 
+        """
+        try:
+            received_message = self.sqs_client.receive_message(
+                QueueUrl=sqs_queue_url,
+                MaxNumberOfMessages=max_number_of_messages,
+                VisibilityTimeout=visibility_timeout,
+                WaitTimeSeconds=wait_time_seconds,
+                MessageAttributeNames=message_attribute_names,
+                AttributeNames=attribute_names
+            )
+
+            if 'Messages' in received_message:
+                for message in received_message['Messages']:
+                    if not is_message_integrity_verified(message['Body'], message['MD5OfBody']):
+                        raise ValueError("Message corrupted, Message integrity verification failed!")
+
+                    message['Body'] = json.loads(message['Body'])
+
+                    message_attributes = message.get('MessageAttributes', {})
+                    redis_key = message_attributes.get('redis_key', {}).get('Value')
+                    if redis_key:
+                        message_body = self.fetch_value_from_redis(redis_key)
+                        if message_body:
+                            message['Body'] = message_body
+                        else:
+                            logger.exception("Couldn't find message body in Redis with key=%s!", redis_key)
+                            continue
+
+                    processing_result = handler(message)
+                    if processing_result:
+                        self.sqs_client.delete_message(
+                            QueueUrl=sqs_queue_url,
+                            ReceiptHandle=message['ReceiptHandle']
+                        )
+            else:
+                logger.info("No messages in queue with URL=%s!", sqs_queue_url)
+
+            return received_message
+
+        except ClientError as error:
+            logger.exception("Couldn't poll message from queue with URL=%s!", sqs_queue_url)
+            raise error
+    
     def subscribe_to_topic(
         self,
         sns_topic_arn_list: list,
