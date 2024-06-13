@@ -390,7 +390,7 @@ class AWSPubSubAdapter():
         attribute_names: list = ['All']
     ):
         """
-            This method is used to poll raw message from the queue.
+            This method is used to poll raw message from the queue when raw message delivery is enabled for a topic.
             The Message response will look something like:
             {
                 'MessageId': 'c6af9ac6-7b61-11e6-9a41-93e8deadbeef',
