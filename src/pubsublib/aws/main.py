@@ -3,7 +3,8 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 import boto3.session
-from pubsublib.aws.utils.helper import bind_attributes, is_large_message, validate_message_attributes, is_message_integrity_verified
+from pubsublib.aws.utils.helper import bind_attributes, validate_message_attributes, is_message_integrity_verified
+from pubsublib.common.codec import gzip_and_b64
 from pubsublib.common.cache_adapter import CacheAdapter
 import uuid
 
@@ -148,6 +149,13 @@ class AWSPubSubAdapter():
                 attributes
             )
 
+    def __compress_and_flag(self, message: str, attributes: dict) -> tuple[str, dict]:
+        """gzip+base64 the message and set compress flag on attributes."""
+        attributes = attributes or {}
+        b64 = gzip_and_b64(message.encode("utf-8"), level=-1)
+        attributes["compress"] = "true"
+        return b64, attributes
+
     def __publish_message_standard_queue(
         self,
         topic_arn: str,
@@ -166,11 +174,8 @@ class AWSPubSubAdapter():
         :return: The ID of the message.
         """
         try:
-            if is_large_message(message):
-                # body is larger than 64kB. Best to put it in redis with expiry time of 10 days
-                redis_key = uuid.uuid4()
-                attributes["redis_key"] = redis_key
-                self.cache_adapter.set(redis_key, message, 10*24*60)
+            # (gzip + base64)
+            message, attributes = self.__compress_and_flag(message, attributes)
 
             if validate_message_attributes(attributes):
                 message_attributes = bind_attributes(attributes)
@@ -195,41 +200,39 @@ class AWSPubSubAdapter():
         message_deduplication_id: str,
         attributes: dict
     ):
-        """
-        Publishes a message to a FIFO topic. The message_group_id and message_deduplication_id
-        are used to ensure that the message is processed in the correct order and that
-        duplicate messages are not sent.
+    """
+    Publishes a message to a FIFO topic. The message_group_id and message_deduplication_id
+    are used to ensure that the message is processed in the correct order and that
+    duplicate messages are not sent.
 
-        :param topic: The topic to publish to.
-        :param message: The message to publish.
-        :param message_group_id: The message group ID.
-        :param message_deduplication_id: The message deduplication ID.
-        :param attributes: The key-value attributes to attach to the message. Values
-                           must be either `str` or `bytes`.
-        :return: The ID of the message.
-        """
-        try:
-            if is_large_message(message):
-                # body is larger than 200kB. Best to put it in redis with expiry time of 10 days
-                redis_key = uuid.uuid4()
-                attributes["redis_key"] = redis_key
-                self.cache_adapter.set(redis_key, message, 10*24*60)
+    :param topic: The topic to publish to.
+    :param message: The message to publish.
+    :param message_group_id: The message group ID.
+    :param message_deduplication_id: The message deduplication ID.
+    :param attributes: The key-value attributes to attach to the message. Values
+                       must be either `str` or `bytes`.
+    :return: The ID of the message.
+    """
+    try:
+        # (gzip + base64)
+        message, attributes = self.__compress_and_flag(message, attributes)
 
-            if validate_message_attributes(attributes):
-                message_attributes = bind_attributes(attributes)
-                response = self.sns_client.publish(
-                    TopicArn=topic_arn,
-                    Message=message,
-                    MessageGroupId=message_group_id,
-                    MessageDeduplicationId=message_deduplication_id,
-                    MessageAttributes=message_attributes
-                )
-                message_id = response["MessageId"]
-        except ClientError:
-            logger.exception(
-                "Couldn't publish message to FIFO topic %s.", topic_arn)
-        else:
-            return message_id
+        if validate_message_attributes(attributes):
+            message_attributes = bind_attributes(attributes)
+            response = self.sns_client.publish(
+                TopicArn=topic_arn,
+                Message=message,
+                MessageGroupId=message_group_id,
+                MessageDeduplicationId=message_deduplication_id,
+                MessageAttributes=message_attributes
+            )
+            message_id = response["MessageId"]
+    except ClientError:
+        logger.exception(
+            "Couldn't publish message to FIFO topic %s.", topic_arn)
+        return None
+    else:
+        return message_id
 
     def create_queue(
         self,
