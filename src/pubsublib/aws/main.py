@@ -4,7 +4,7 @@ from botocore.exceptions import ClientError
 import logging
 import boto3.session
 from pubsublib.aws.utils.helper import bind_attributes, validate_message_attributes, is_message_integrity_verified
-from pubsublib.common.codec import gzip_and_b64
+from pubsublib.common.codec import gzip_and_b64, b64_decode_and_gunzip_if
 from pubsublib.common.cache_adapter import CacheAdapter
 import uuid
 
@@ -368,6 +368,21 @@ class AWSPubSubAdapter():
                             logger.exception(
                                 "Couldn't find message body in redis with key=%s!", redis_key)
                             continue
+                    # Decode/decompress if needed (SNS envelope)
+                    try:
+                        sqs_attrs = message.get('MessageAttributes', {}) or {}
+                        compress_attr = sqs_attrs.get('compress', {})
+                        compressed = str(compress_attr.get('StringValue', '')).lower() == 'true'
+                        if not compressed:
+                            body_attrs = message['Body'].get('MessageAttributes', {}) or {}
+                            if 'compress' in body_attrs:
+                                compressed = str(body_attrs.get('compress', {}).get('Value', '')).lower() == 'true'
+                        if compressed and isinstance(message['Body'].get('Message'), str):
+                            decoded = b64_decode_and_gunzip_if(message['Body']['Message'], True)
+                            message['Body']['Message'] = decoded.decode('utf-8')
+                    except Exception as e:
+                        logger.exception("Failed to decode/decompress message: %s", e)
+                        continue
                     processing_result = handler(message)
                     if processing_result:
                         self.sqs_client.delete_message(
@@ -423,17 +438,33 @@ class AWSPubSubAdapter():
                     if not is_message_integrity_verified(message['Body'], message['MD5OfBody']):
                         raise ValueError("Message corrupted, Message integrity verification failed!")
 
-                    message['Body'] = json.loads(message['Body'])
-
-                    message_attributes = message.get('MessageAttributes', {})
-                    redis_key = message_attributes.get('redis_key', {}).get('Value')
+                    # Determine source body (Redis vs inline)
+                    body_str = message['Body']
+                    msg_attrs = message.get('MessageAttributes', {}) or {}
+                    redis_key = msg_attrs.get('redis_key', {}).get('StringValue') or msg_attrs.get('redis_key', {}).get('Value')
                     if redis_key:
                         message_body = self.fetch_value_from_redis(redis_key)
                         if message_body:
-                            message['Body'] = message_body
+                            body_str = message_body
                         else:
                             logger.exception("Couldn't find message body in Redis with key=%s!", redis_key)
                             continue
+
+                    # Decompress if flagged
+                    compressed = str(msg_attrs.get('compress', {}).get('StringValue', '')).lower() == 'true'
+                    try:
+                        if compressed and isinstance(body_str, str):
+                            decoded = b64_decode_and_gunzip_if(body_str, True)
+                            body_str = decoded.decode('utf-8')
+                    except Exception as e:
+                        logger.exception("Failed to decode/decompress raw message: %s", e)
+                        continue
+
+                    try:
+                        message['Body'] = json.loads(body_str)
+                    except Exception as e:
+                        logger.exception("Failed to parse message JSON: %s", e)
+                        continue
 
                     processing_result = handler(message)
                     if processing_result:
