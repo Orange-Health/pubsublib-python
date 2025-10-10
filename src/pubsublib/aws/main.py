@@ -372,16 +372,22 @@ class AWSPubSubAdapter():
                     try:
                         sqs_attrs = message.get('MessageAttributes', {}) or {}
                         compress_attr = sqs_attrs.get('compress', {})
-                        compressed = str(compress_attr.get('StringValue', '')).lower() == 'true'
+                        compressed = str(compress_attr.get(
+                            'StringValue', '')).lower() == 'true'
                         if not compressed:
-                            body_attrs = message['Body'].get('MessageAttributes', {}) or {}
+                            body_attrs = message['Body'].get(
+                                'MessageAttributes', {}) or {}
                             if 'compress' in body_attrs:
-                                compressed = str(body_attrs.get('compress', {}).get('Value', '')).lower() == 'true'
+                                compressed = str(body_attrs.get('compress', {}).get(
+                                    'Value', '')).lower() == 'true'
                         if compressed and isinstance(message['Body'].get('Message'), str):
-                            decoded = b64_decode_and_gunzip_if(message['Body']['Message'], True)
-                            message['Body']['Message'] = decoded.decode('utf-8')
+                            decoded = b64_decode_and_gunzip_if(
+                                message['Body']['Message'], True)
+                            message['Body']['Message'] = decoded.decode(
+                                'utf-8')
                     except Exception as e:
-                        logger.exception("Failed to decode/decompress message: %s", e)
+                        logger.exception(
+                            "Failed to decode/decompress message: %s", e)
                         continue
                     processing_result = handler(message)
                     if processing_result:
@@ -396,7 +402,7 @@ class AWSPubSubAdapter():
             logger.exception(
                 "Couldn't poll message from queue with URL=%s!", sqs_queue_url)
             raise error
-        
+
     def poll_raw_message_from_queue(
         self,
         sqs_queue_url: str,
@@ -436,28 +442,33 @@ class AWSPubSubAdapter():
             if 'Messages' in received_message:
                 for message in received_message['Messages']:
                     if not is_message_integrity_verified(message['Body'], message['MD5OfBody']):
-                        raise ValueError("Message corrupted, Message integrity verification failed!")
+                        raise ValueError(
+                            "Message corrupted, Message integrity verification failed!")
 
                     # Determine source body (Redis vs inline)
                     body_str = message['Body']
                     msg_attrs = message.get('MessageAttributes', {}) or {}
-                    redis_key = msg_attrs.get('redis_key', {}).get('StringValue') or msg_attrs.get('redis_key', {}).get('Value')
+                    redis_key = msg_attrs.get('redis_key', {}).get(
+                        'StringValue') or msg_attrs.get('redis_key', {}).get('Value')
                     if redis_key:
                         message_body = self.fetch_value_from_redis(redis_key)
                         if message_body:
                             body_str = message_body
                         else:
-                            logger.exception("Couldn't find message body in Redis with key=%s!", redis_key)
+                            logger.exception(
+                                "Couldn't find message body in Redis with key=%s!", redis_key)
                             continue
 
                     # Decompress if flagged
-                    compressed = str(msg_attrs.get('compress', {}).get('StringValue', '')).lower() == 'true'
+                    compressed = str(msg_attrs.get('compress', {}).get(
+                        'StringValue', '')).lower() == 'true'
                     try:
                         if compressed and isinstance(body_str, str):
                             decoded = b64_decode_and_gunzip_if(body_str, True)
                             body_str = decoded.decode('utf-8')
                     except Exception as e:
-                        logger.exception("Failed to decode/decompress raw message: %s", e)
+                        logger.exception(
+                            "Failed to decode/decompress raw message: %s", e)
                         continue
 
                     try:
@@ -478,9 +489,10 @@ class AWSPubSubAdapter():
             return received_message
 
         except ClientError as error:
-            logger.exception("Couldn't poll message from queue with URL=%s!", sqs_queue_url)
+            logger.exception(
+                "Couldn't poll message from queue with URL=%s!", sqs_queue_url)
             raise error
-    
+
     def subscribe_to_topic(
         self,
         sns_topic_arn_list: list,

@@ -6,8 +6,8 @@ build-backend = "hatchling.build"
 name = "pubsublib"
 version = "0.1.18"
 authors = [
-  { name="Anant Chauhan", email="anant.chauhan@orangehealth.in"},
-  { name="Rajendra Talekar", email="talekar.r@gmail.com"}
+    {name = "Anant Chauhan", email = "anant.chauhan@orangehealth.in"},
+    {name = "Rajendra Talekar", email = "talekar.r@gmail.com"}
 ]
 description = "The Python Adaptation of the PubSubLib for Orange Health"
 readme = "README.md"
