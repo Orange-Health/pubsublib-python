@@ -3,6 +3,7 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 import boto3.session
+from typing import Tuple, Dict
 from pubsublib.aws.utils.helper import bind_attributes, validate_message_attributes, is_message_integrity_verified
 from pubsublib.common.codec import gzip_and_b64, b64_decode_and_gunzip_if
 from pubsublib.common.cache_adapter import CacheAdapter
@@ -149,7 +150,7 @@ class AWSPubSubAdapter():
                 attributes
             )
 
-    def __compress_and_flag(self, message: str, attributes: dict) -> tuple[str, dict]:
+    def __compress_and_flag(self, message: str, attributes: dict) -> Tuple[str, dict]:
         """gzip+base64 the message and set compress flag on attributes."""
         attributes = attributes or {}
         b64 = gzip_and_b64(message.encode("utf-8"))
