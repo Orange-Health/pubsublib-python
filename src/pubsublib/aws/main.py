@@ -372,15 +372,31 @@ class AWSPubSubAdapter():
                     # Decode/decompress if needed (SNS envelope)
                     try:
                         sqs_attrs = message.get('MessageAttributes', {}) or {}
+                        compressed = False
+                        
+                        # Check for flag: compress="true"
                         compress_attr = sqs_attrs.get('compress', {})
-                        compressed = str(compress_attr.get(
-                            'StringValue', '')).lower() == 'true'
+                        if str(compress_attr.get('StringValue', '')).lower() == 'true':
+                            compressed = True
+                        
+                        # Check for citadel/hedwig flag: content_encoding="gzip"
                         if not compressed:
-                            body_attrs = message['Body'].get(
-                                'MessageAttributes', {}) or {}
+                            content_encoding_attr = sqs_attrs.get('content_encoding', {})
+                            if str(content_encoding_attr.get('StringValue', '')).lower() == 'gzip':
+                                compressed = True
+                        
+                        # Check in SNS envelope MessageAttributes
+                        if not compressed:
+                            body_attrs = message['Body'].get('MessageAttributes', {}) or {}
+                            # Check for compress flag
                             if 'compress' in body_attrs:
-                                compressed = str(body_attrs.get('compress', {}).get(
-                                    'Value', '')).lower() == 'true'
+                                if str(body_attrs.get('compress', {}).get('Value', '')).lower() == 'true':
+                                    compressed = True
+                            # Check for content_encoding flag
+                            if not compressed and 'content_encoding' in body_attrs:
+                                if str(body_attrs.get('content_encoding', {}).get('Value', '')).lower() == 'gzip':
+                                    compressed = True
+                        
                         if compressed and isinstance(message['Body'].get('Message'), str):
                             decoded = b64_decode_and_gunzip_if(
                                 message['Body']['Message'], True)
@@ -461,8 +477,17 @@ class AWSPubSubAdapter():
                             continue
 
                     # Decompress if flagged
-                    compressed = str(msg_attrs.get('compress', {}).get(
-                        'StringValue', '')).lower() == 'true'
+                    compressed = False
+                    
+                    # Check for flag: compress="true"
+                    if str(msg_attrs.get('compress', {}).get('StringValue', '')).lower() == 'true':
+                        compressed = True
+                    
+                    # Check for old citadel/hedwig flag: content_encoding="gzip"
+                    if not compressed:
+                        if str(msg_attrs.get('content_encoding', {}).get('StringValue', '')).lower() == 'gzip':
+                            compressed = True
+                    
                     try:
                         if compressed and isinstance(body_str, str):
                             decoded = b64_decode_and_gunzip_if(body_str, True)
