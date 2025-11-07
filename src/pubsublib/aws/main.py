@@ -3,7 +3,9 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 import boto3.session
-from pubsublib.aws.utils.helper import bind_attributes, is_large_message, validate_message_attributes, is_message_integrity_verified
+from typing import Tuple, Dict
+from pubsublib.aws.utils.helper import bind_attributes, validate_message_attributes, is_message_integrity_verified
+from pubsublib.common.codec import gzip_and_b64, b64_decode_and_gunzip_if
 from pubsublib.common.cache_adapter import CacheAdapter
 import uuid
 
@@ -148,6 +150,13 @@ class AWSPubSubAdapter():
                 attributes
             )
 
+    def __compress_and_flag(self, message: str, attributes: dict) -> Tuple[str, dict]:
+        """gzip+base64 the message and set compress flag on attributes."""
+        attributes = attributes or {}
+        b64 = gzip_and_b64(message.encode("utf-8"))
+        attributes["compress"] = "true"
+        return b64, attributes
+
     def __publish_message_standard_queue(
         self,
         topic_arn: str,
@@ -166,11 +175,8 @@ class AWSPubSubAdapter():
         :return: The ID of the message.
         """
         try:
-            if is_large_message(message):
-                # body is larger than 64kB. Best to put it in redis with expiry time of 10 days
-                redis_key = uuid.uuid4()
-                attributes["redis_key"] = redis_key
-                self.cache_adapter.set(redis_key, message, 10*24*60)
+            # (gzip + base64)
+            message, attributes = self.__compress_and_flag(message, attributes)
 
             if validate_message_attributes(attributes):
                 message_attributes = bind_attributes(attributes)
@@ -209,11 +215,8 @@ class AWSPubSubAdapter():
         :return: The ID of the message.
         """
         try:
-            if is_large_message(message):
-                # body is larger than 200kB. Best to put it in redis with expiry time of 10 days
-                redis_key = uuid.uuid4()
-                attributes["redis_key"] = redis_key
-                self.cache_adapter.set(redis_key, message, 10*24*60)
+            # (gzip + base64)
+            message, attributes = self.__compress_and_flag(message, attributes)
 
             if validate_message_attributes(attributes):
                 message_attributes = bind_attributes(attributes)
@@ -228,6 +231,7 @@ class AWSPubSubAdapter():
         except ClientError:
             logger.exception(
                 "Couldn't publish message to FIFO topic %s.", topic_arn)
+            return None
         else:
             return message_id
 
@@ -365,6 +369,27 @@ class AWSPubSubAdapter():
                             logger.exception(
                                 "Couldn't find message body in redis with key=%s!", redis_key)
                             continue
+                    # Decode/decompress if needed (SNS envelope)
+                    try:
+                        sqs_attrs = message.get('MessageAttributes', {}) or {}
+                        compress_attr = sqs_attrs.get('compress', {})
+                        compressed = str(compress_attr.get(
+                            'StringValue', '')).lower() == 'true'
+                        if not compressed:
+                            body_attrs = message['Body'].get(
+                                'MessageAttributes', {}) or {}
+                            if 'compress' in body_attrs:
+                                compressed = str(body_attrs.get('compress', {}).get(
+                                    'Value', '')).lower() == 'true'
+                        if compressed and isinstance(message['Body'].get('Message'), str):
+                            decoded = b64_decode_and_gunzip_if(
+                                message['Body']['Message'], True)
+                            message['Body']['Message'] = decoded.decode(
+                                'utf-8')
+                    except Exception as e:
+                        logger.exception(
+                            "Failed to decode/decompress message: %s", e)
+                        continue
                     processing_result = handler(message)
                     if processing_result:
                         self.sqs_client.delete_message(
@@ -378,7 +403,7 @@ class AWSPubSubAdapter():
             logger.exception(
                 "Couldn't poll message from queue with URL=%s!", sqs_queue_url)
             raise error
-        
+
     def poll_raw_message_from_queue(
         self,
         sqs_queue_url: str,
@@ -418,19 +443,40 @@ class AWSPubSubAdapter():
             if 'Messages' in received_message:
                 for message in received_message['Messages']:
                     if not is_message_integrity_verified(message['Body'], message['MD5OfBody']):
-                        raise ValueError("Message corrupted, Message integrity verification failed!")
+                        raise ValueError(
+                            "Message corrupted, Message integrity verification failed!")
 
-                    message['Body'] = json.loads(message['Body'])
-
-                    message_attributes = message.get('MessageAttributes', {})
-                    redis_key = message_attributes.get('redis_key', {}).get('Value')
+                    # Determine source body (Redis vs inline)
+                    body_str = message['Body']
+                    msg_attrs = message.get('MessageAttributes', {}) or {}
+                    redis_key = msg_attrs.get('redis_key', {}).get(
+                        'StringValue') or msg_attrs.get('redis_key', {}).get('Value')
                     if redis_key:
                         message_body = self.fetch_value_from_redis(redis_key)
                         if message_body:
-                            message['Body'] = message_body
+                            body_str = message_body
                         else:
-                            logger.exception("Couldn't find message body in Redis with key=%s!", redis_key)
+                            logger.exception(
+                                "Couldn't find message body in Redis with key=%s!", redis_key)
                             continue
+
+                    # Decompress if flagged
+                    compressed = str(msg_attrs.get('compress', {}).get(
+                        'StringValue', '')).lower() == 'true'
+                    try:
+                        if compressed and isinstance(body_str, str):
+                            decoded = b64_decode_and_gunzip_if(body_str, True)
+                            body_str = decoded.decode('utf-8')
+                    except Exception as e:
+                        logger.exception(
+                            "Failed to decode/decompress raw message: %s", e)
+                        continue
+
+                    try:
+                        message['Body'] = json.loads(body_str)
+                    except Exception as e:
+                        logger.exception("Failed to parse message JSON: %s", e)
+                        continue
 
                     processing_result = handler(message)
                     if processing_result:
@@ -444,9 +490,10 @@ class AWSPubSubAdapter():
             return received_message
 
         except ClientError as error:
-            logger.exception("Couldn't poll message from queue with URL=%s!", sqs_queue_url)
+            logger.exception(
+                "Couldn't poll message from queue with URL=%s!", sqs_queue_url)
             raise error
-    
+
     def subscribe_to_topic(
         self,
         sns_topic_arn_list: list,
