@@ -3,7 +3,7 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 import boto3.session
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 from pubsublib.aws.utils.helper import bind_attributes, validate_message_attributes, is_message_integrity_verified, is_large_message
 from pubsublib.common.codec import gzip_and_b64, b64_decode_and_gunzip_if
 from pubsublib.common.cache_adapter import CacheAdapter
@@ -23,7 +23,7 @@ class AWSPubSubAdapter():
         sns_endpoint_url: str = None,
         sqs_endpoint_url: str = None,
         max_connections: int = 10,
-        compress_enabled: bool | None = None,
+        compress_enabled: Optional[bool] = None,
     ):
         self.my_session = boto3.session.Session(
             region_name=aws_region,
