@@ -3,11 +3,12 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 import boto3.session
-from typing import Tuple, Dict
-from pubsublib.aws.utils.helper import bind_attributes, validate_message_attributes, is_message_integrity_verified
+from typing import Tuple, Dict, Optional
+from pubsublib.aws.utils.helper import bind_attributes, validate_message_attributes, is_message_integrity_verified, is_large_message
 from pubsublib.common.codec import gzip_and_b64, b64_decode_and_gunzip_if
 from pubsublib.common.cache_adapter import CacheAdapter
 import uuid
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,8 @@ class AWSPubSubAdapter():
         redis_location: str,
         sns_endpoint_url: str = None,
         sqs_endpoint_url: str = None,
-        max_connections: int = 10
+        max_connections: int = 10,
+        compress_enabled: Optional[bool] = None,
     ):
         self.my_session = boto3.session.Session(
             region_name=aws_region,
@@ -39,6 +41,14 @@ class AWSPubSubAdapter():
         else:
             self.sqs_client = self.my_session.client("sqs")
         self.cache_adapter = CacheAdapter(redis_location, max_connections)
+        if compress_enabled is None:
+            envv = os.getenv("PUBSUBLIB_COMPRESSION_ENABLED", "")
+            self.compress_enabled = str(envv).lower() in ("true", "1", "yes")
+        else:
+            self.compress_enabled = bool(compress_enabled)
+
+    def set_compression_enabled(self, enabled: bool):
+        self.compress_enabled = bool(enabled)
 
     def create_topic(
         self,
@@ -151,7 +161,9 @@ class AWSPubSubAdapter():
             )
 
     def __compress_and_flag(self, message: str, attributes: dict) -> Tuple[str, dict]:
-        """gzip+base64 the message and set compress flag on attributes."""
+        """gzip+base64 the message and set compress flag on attributes if compression enabled."""
+        if not getattr(self, "compress_enabled", True):
+            return message, attributes or {}
         attributes = attributes or {}
         b64 = gzip_and_b64(message.encode("utf-8"))
         attributes["compress"] = "true"
@@ -175,8 +187,15 @@ class AWSPubSubAdapter():
         :return: The ID of the message.
         """
         try:
-            # (gzip + base64)
+            # (gzip + base64) if compression enabled
             message, attributes = self.__compress_and_flag(message, attributes)
+
+            # offload large bodies to Redis (200kb limit)
+            if is_large_message(message):
+                attributes = attributes or {}
+                redis_key = str(uuid.uuid4())
+                attributes["redis_key"] = redis_key
+                self.cache_adapter.set(redis_key, message, 10*24*60)
 
             if validate_message_attributes(attributes):
                 message_attributes = bind_attributes(attributes)
@@ -215,8 +234,15 @@ class AWSPubSubAdapter():
         :return: The ID of the message.
         """
         try:
-            # (gzip + base64)
+            # (gzip + base64) if compression enabled
             message, attributes = self.__compress_and_flag(message, attributes)
+
+            # offload large bodies to Redis (200kb limit)
+            if is_large_message(message):
+                attributes = attributes or {}
+                redis_key = str(uuid.uuid4())
+                attributes["redis_key"] = redis_key
+                self.cache_adapter.set(redis_key, message, 10*24*60)
 
             if validate_message_attributes(attributes):
                 message_attributes = bind_attributes(attributes)
