@@ -28,5 +28,9 @@ pubsub_adapter = AWSPubSubAdapter(
 )
 ```
 
+#### Using AWS IAM Roles for Service Accounts 
+
+Pass `aws_region`, `aws_access_key_id` and `aws_secret_access_key` as empty strings to intialize AWS SDK without credentials, effectively falling back to Service Accounts
+
 [Steps to Publish Package](https://github.com/Orange-Health/pubsublib-python/wiki/PyPI-%7C-Publish-Package#steps-to-publish-the-pubsublib-package-on-pypi)
 
