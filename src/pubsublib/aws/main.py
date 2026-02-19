@@ -25,11 +25,14 @@ class AWSPubSubAdapter():
         max_connections: int = 10,
         compress_enabled: Optional[bool] = None,
     ):
-        self.my_session = boto3.session.Session(
-            region_name=aws_region,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key
-        )
+        if aws_access_key_id and aws_secret_access_key:
+            self.my_session = boto3.session.Session(
+                region_name=aws_region,
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key
+            )
+        else:
+            self.my_session = boto3.session.Session()
         if sns_endpoint_url != None:
             self.sns_client = self.my_session.client(
                 "sns", endpoint_url=sns_endpoint_url)
