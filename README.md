@@ -30,7 +30,7 @@ pubsub_adapter = AWSPubSubAdapter(
 
 #### Using AWS IAM Roles for Service Accounts 
 
-Pass `aws_region`, `aws_access_key_id` and `aws_secret_access_key` as empty strings to intialize AWS SDK without credentials, effectively falling back to Service Accounts
+When using IAM Roles for Service Accounts (IRSA), pass `aws_access_key_id` and `aws_secret_access_key` as empty strings so that the AWS SDK uses its default credential provider chain (which will pick up the service account role). You should still provide a valid `aws_region` here, or ensure that `AWS_REGION` or `AWS_DEFAULT_REGION` is set in the environment or shared AWS config when omitting it.
 
 [Steps to Publish Package](https://github.com/Orange-Health/pubsublib-python/wiki/PyPI-%7C-Publish-Package#steps-to-publish-the-pubsublib-package-on-pypi)
 
