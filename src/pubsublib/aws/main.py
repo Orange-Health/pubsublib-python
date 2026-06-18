@@ -24,6 +24,7 @@ class AWSPubSubAdapter():
         sqs_endpoint_url: str = None,
         max_connections: int = 10,
         compress_enabled: Optional[bool] = None,
+        sqs_managed_sse_enabled: Optional[bool] = None,
     ):
         if aws_access_key_id and aws_secret_access_key:
             self.my_session = boto3.session.Session(
@@ -49,9 +50,56 @@ class AWSPubSubAdapter():
             self.compress_enabled = str(envv).lower() in ("true", "1", "yes")
         else:
             self.compress_enabled = bool(compress_enabled)
+        if sqs_managed_sse_enabled is None:
+            self.sqs_managed_sse_enabled = False
+        else:
+            self.sqs_managed_sse_enabled = bool(sqs_managed_sse_enabled)
 
     def set_compression_enabled(self, enabled: bool):
         self.compress_enabled = bool(enabled)
+
+    def set_sqs_managed_sse_enabled(self, enabled: bool):
+        self.sqs_managed_sse_enabled = bool(enabled)
+
+    def _build_queue_create_attributes(
+        self,
+        *,
+        visiblity_timeout: int,
+        message_retention_period: int,
+        sqs_managed_sse_enabled: bool,
+        is_fifo: bool = False,
+        content_based_deduplication: bool = False,
+    ) -> Dict[str, str]:
+        attributes = {
+            "VisibilityTimeout": str(visiblity_timeout),
+            "MessageRetentionPeriod": str(message_retention_period),
+        }
+        if is_fifo:
+            attributes["FifoQueue"] = "true"
+            attributes["ContentBasedDeduplication"] = str(content_based_deduplication).lower()
+        if sqs_managed_sse_enabled:
+            attributes["SqsManagedSseEnabled"] = "true"
+        return attributes
+
+    def _enforce_sqs_managed_sse(self, queue_name: str) -> None:
+        try:
+            queue_url = self.sqs_client.get_queue_url(QueueName=queue_name)["QueueUrl"]
+        except ClientError:
+            logger.exception(
+                "Couldn't fetch queue URL to enforce SSE for queue %s.", queue_name
+            )
+            return
+
+        try:
+            self.sqs_client.set_queue_attributes(
+                QueueUrl=queue_url,
+                Attributes={"SqsManagedSseEnabled": "true"},
+            )
+            logger.info("Enforced SSE on existing queue %s", queue_name)
+        except ClientError:
+            logger.exception(
+                "Couldn't enforce SSE on existing queue %s.", queue_name
+            )
 
     def create_topic(
         self,
@@ -280,16 +328,26 @@ class AWSPubSubAdapter():
         :return: The newly created queue.
         """
         if is_fifo:
-            return self.__create_fifo_queue(name, visiblity_timeout, message_retention_period, content_based_deduplication, tags)
-        else:
-            return self.__create_standard_queue(name, visiblity_timeout, message_retention_period, tags)
+            return self.__create_fifo_queue(
+                name,
+                visiblity_timeout,
+                message_retention_period,
+                content_based_deduplication,
+                tags,
+            )
+        return self.__create_standard_queue(
+            name,
+            visiblity_timeout,
+            message_retention_period,
+            tags,
+        )
 
     def __create_standard_queue(
         self,
         name: str,
         visiblity_timeout: int = 30,
         message_retention_period: int = 345600,
-        tags: dict = {}
+        tags: dict = {},
     ):
         """
         Creates a queue.
@@ -301,14 +359,19 @@ class AWSPubSubAdapter():
         try:
             queue = self.sqs_client.create_queue(
                 QueueName=name,
-                Attributes={
-                    "VisibilityTimeout": str(visiblity_timeout),
-                    "MessageRetentionPeriod": str(message_retention_period)
-                },
+                Attributes=self._build_queue_create_attributes(
+                    visiblity_timeout=visiblity_timeout,
+                    message_retention_period=message_retention_period,
+                    sqs_managed_sse_enabled=self.sqs_managed_sse_enabled,
+                ),
                 tags=tags
             )
             logger.info("Created queue %s ", name)
-        except ClientError:
+        except ClientError as error:
+            error_code = error.response.get("Error", {}).get("Code", "")
+            if self.sqs_managed_sse_enabled and error_code in ("QueueNameExists", "QueueAlreadyExists"):
+                self._enforce_sqs_managed_sse(name)
+                return self.sqs_client.get_queue_url(QueueName=name)
             logger.exception("Couldn't create queue %s.", name)
             raise
         else:
@@ -320,7 +383,7 @@ class AWSPubSubAdapter():
         visiblity_timeout: int = 30,
         message_retention_period: int = 345600,  # 4days
         content_based_deduplication: bool = True,
-        tags: dict = {}
+        tags: dict = {},
     ):
         """
         Creates a FIFO queue.
@@ -332,12 +395,13 @@ class AWSPubSubAdapter():
             if name.endswith(".fifo"):
                 queue = self.sqs_client.create_queue(
                     QueueName=name,
-                    Attributes={
-                        "FifoQueue": "true",
-                        "VisibilityTimeout": str(visiblity_timeout),
-                        "MessageRetentionPeriod": str(message_retention_period),
-                        "ContentBasedDeduplication": str(content_based_deduplication).lower()
-                    },
+                    Attributes=self._build_queue_create_attributes(
+                        visiblity_timeout=visiblity_timeout,
+                        message_retention_period=message_retention_period,
+                        sqs_managed_sse_enabled=self.sqs_managed_sse_enabled,
+                        is_fifo=True,
+                        content_based_deduplication=content_based_deduplication,
+                    ),
                     tags=tags
                 )
                 logger.info("Created FIFO queue with name=%s.", name)
@@ -346,6 +410,10 @@ class AWSPubSubAdapter():
                 logger.error("FIFO Queue name must end with .fifo!")
                 return None
         except ClientError as error:
+            error_code = error.response.get("Error", {}).get("Code", "")
+            if self.sqs_managed_sse_enabled and error_code in ("QueueNameExists", "QueueAlreadyExists"):
+                self._enforce_sqs_managed_sse(name)
+                return self.sqs_client.get_queue_url(QueueName=name)
             logger.exception("Couldn't create FIFO queue with name=%s!", name)
             raise error
 
