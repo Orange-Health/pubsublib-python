@@ -30,7 +30,7 @@ pubsub_adapter = AWSPubSubAdapter(
 
 #### Using AWS IAM Roles for Service Accounts 
 
-When using IAM Roles for Service Accounts (IRSA), pass `aws_access_key_id` and `aws_secret_access_key` as empty strings so that the AWS SDK uses its default credential provider chain (which will pick up the service account role). You should still provide a valid `aws_region` here, or ensure that `AWS_REGION` or `AWS_DEFAULT_REGION` is set in the environment or shared AWS config when omitting it.
+When using IAM Roles for Service Accounts (IRSA), pass `aws_access_key_id` and `aws_secret_access_key` as empty strings so that the AWS SDK uses its default credential provider chain (which will pick up the service account role). Always pass a valid `aws_region` — it is applied to the boto3 session even when credentials are empty (required to avoid `NoRegionError` when `AWS_DEFAULT_REGION` is unset).
 
 #### SQS server-side encryption (SSE-SQS)
 
