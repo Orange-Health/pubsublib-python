@@ -26,6 +26,9 @@ class AWSPubSubAdapter():
         compress_enabled: Optional[bool] = None,
         sqs_managed_sse_enabled: Optional[bool] = None,
     ):
+        # Always pass region_name. With empty credentials (IRSA), Session() without
+        # region raises botocore NoRegionError unless AWS_DEFAULT_REGION is set —
+        # AWS_REGION alone is not enough on older botocore.
         if aws_access_key_id and aws_secret_access_key:
             self.my_session = boto3.session.Session(
                 region_name=aws_region,
@@ -33,7 +36,7 @@ class AWSPubSubAdapter():
                 aws_secret_access_key=aws_secret_access_key
             )
         else:
-            self.my_session = boto3.session.Session()
+            self.my_session = boto3.session.Session(region_name=aws_region)
         if sns_endpoint_url != None:
             self.sns_client = self.my_session.client(
                 "sns", endpoint_url=sns_endpoint_url)
